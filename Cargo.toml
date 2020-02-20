@@ -8,12 +8,12 @@ build = "build.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-sdl2 = { version = "0.33.0", features = ["bundled", "static-link"] }
 gl = { path = "lib/gl" }
 failure = "0.1"
 render_gl_derive = { path = "render_gl_derive" }
 half = "1.1.1"
 nalgebra = "0.18"
+glutin = "0.23"
 
 [build-dependencies]
 walkdir = "2.1"

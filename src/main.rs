@@ -19,35 +19,24 @@ struct Vertex {
     clr: data::f32x3,
 }
 
+use glutin::event::{Event, WindowEvent};
+use glutin::event_loop::{ControlFlow, EventLoop};
+use glutin::window::WindowBuilder;
+use glutin::ContextBuilder;
+
 fn main() {
-    if let Err(e) = run() {
-        println!("{}", failure_to_string(e));
-    }
-}
+    let event_loop = EventLoop::new();
+    let window = WindowBuilder::new().with_title("A fantastic window!");
 
-fn run() -> Result<(), failure::Error> {
-    let res = Resources::from_relative_exe_path(Path::new("assets")).unwrap();
-    let sdl = sdl2::init().unwrap();
-    let video_subsystem = sdl.video().unwrap();
-
-    let gl_attr = video_subsystem.gl_attr();
-
-    gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
-    gl_attr.set_context_version(4, 1);
-
-    let window = video_subsystem
-        .window("Game", 900, 700)
-        .opengl()
-        .resizable()
-        .build()
+    let windowed_context = ContextBuilder::new()
+        .build_windowed(window, &event_loop)
         .unwrap();
 
-    let _gl_context = window.gl_create_context().unwrap();
-    let gl = gl::Gl::load_with(|s| {
-        video_subsystem.gl_get_proc_address(s) as *const std::os::raw::c_void
-    });
+    let windowed_context = unsafe { windowed_context.make_current().unwrap() };
 
-    // set up shader program
+    let gl = gl::Gl::load_with(|ptr| windowed_context.get_proc_address(ptr) as *const _);
+
+    let res = Resources::from_relative_exe_path(Path::new("assets")).unwrap();
     let shader_program = render_gl::Program::from_res(&gl, &res, "shaders/triangle").unwrap();
 
     // set up vertex buffer object
@@ -89,37 +78,38 @@ fn run() -> Result<(), failure::Error> {
         gl.ClearColor(0.3, 0.3, 0.5, 1.0);
     }
 
-    // main loop
+    event_loop.run(move |event, _, control_flow| {
+        *control_flow = ControlFlow::Wait;
 
-    let mut event_pump = sdl.event_pump().unwrap();
-    'main: loop {
-        for event in event_pump.poll_iter() {
-            match event {
-                sdl2::event::Event::Quit { .. } => break 'main,
-                _ => {}
+        match event {
+            Event::LoopDestroyed => return,
+            Event::WindowEvent { event, .. } => match event {
+                WindowEvent::Resized(physical_size) => windowed_context.resize(physical_size),
+                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                _ => (),
+            },
+            Event::RedrawRequested(_) => {
+                unsafe {
+                    gl.Clear(gl::COLOR_BUFFER_BIT);
+                }
+                shader_program.set_used();
+                vao.bind();
+                unsafe {
+                    gl.DrawArrays(
+                        gl::TRIANGLES, // mode
+                        0,             // starting index in the enabled arrays
+                        3,             // number of indices to be rendered
+                    );
+                }
+                windowed_context.swap_buffers().unwrap();
             }
+            _ => (),
         }
+    });
 
-        unsafe {
-            gl.Clear(gl::COLOR_BUFFER_BIT);
-        }
-
-        // draw triangle
-
-        shader_program.set_used();
-        vao.bind();
-        unsafe {
-            gl.DrawArrays(
-                gl::TRIANGLES, // mode
-                0,             // starting index in the enabled arrays
-                3,             // number of indices to be rendered
-            );
-        }
-
-        window.gl_swap_window();
-    }
-
-    Ok(())
+    // if let Err(e) = run() {
+    //     println!("{}", failure_to_string(e));
+    // }
 }
 
 pub fn failure_to_string(e: failure::Error) -> String {
